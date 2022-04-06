@@ -23,15 +23,17 @@ public class QuizActivity extends AppCompatActivity {
     private static final String KEY_INDEX = "index";
     private static final int REQUEST_CODE_CHEAT = 0;
     private static final String KEY_ANSWER = "KEY_ANSWER";
+    private static final String KEY_CHEATS = "KEY_CHEATS";
     private boolean mIsCheater;
+    private int mNumberOfCheats = 0;
     private Button mTrueButton;
     private Button mFalseButton;
     private Button mCheatButton;
     private ImageButton mNextButton;
-    private ImageButton mPrevButton;
     private TextView mQuestionTextView;
+    private TextView mCheats_remaining;
 
-    private Question[] mQuestionBank = new Question[] {
+    private Question[] mQuestionBank = new Question[]{
             new Question(R.string.question_australia, true),
             new Question(R.string.question_oceans, true),
             new Question(R.string.question_mideast, false),
@@ -42,6 +44,7 @@ public class QuizActivity extends AppCompatActivity {
 
     private int mCurrentIndex = 0;
     private int score = 0;
+    private int cheats_allowed = 3;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,9 +52,14 @@ public class QuizActivity extends AppCompatActivity {
         Log.d(TAG, "onCreate(Bundle) called");
         setContentView(R.layout.activity_quiz);
 
+
+        mCheats_remaining = findViewById(R.id.cheats_remaining_textView);
+        mCheats_remaining.setText("Cheat tokens: " + cheats_allowed);
+
         if (savedInstanceState != null) {
             mCurrentIndex = savedInstanceState.getInt(KEY_INDEX, 0);
             mIsCheater = savedInstanceState.getBoolean(KEY_ANSWER, false);
+            mNumberOfCheats = savedInstanceState.getInt(KEY_CHEATS, 0);
         }
 
 
@@ -85,28 +93,19 @@ public class QuizActivity extends AppCompatActivity {
 
             }
         });
-//        mPrevButton = findViewById(R.id.previous_button);
-//        mPrevButton.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                disableButton(false, mFalseButton);
-//                disableButton(false, mTrueButton);
-//
-//                mCurrentIndex --;
-//                if (mCurrentIndex < 0) {
-//                    mCurrentIndex = mCurrentIndex + mQuestionBank.length;
-//                }
-//                updateQuestion();
-//            }
-//        });
-
         mCheatButton = findViewById(R.id.cheat_button);
         mCheatButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                cheats_allowed--;
+                mCheats_remaining.setText("Cheat tokens: " + cheats_allowed);
                 boolean answerIsTrue = mQuestionBank[mCurrentIndex].isAnswerTrue();
-                Intent intent = CheatActivity.newIntent(QuizActivity.this, answerIsTrue);
+
+                Log.d(TAG, "onClick: mNumberOfCheats" + mNumberOfCheats);
+
+                Intent intent = CheatActivity.newIntent(QuizActivity.this, answerIsTrue, mNumberOfCheats);
                 startActivityForResult(intent, REQUEST_CODE_CHEAT);
+
             }
         });
 
@@ -117,9 +116,11 @@ public class QuizActivity extends AppCompatActivity {
                 disableButton(false, mFalseButton);
                 disableButton(false, mTrueButton);
 
-                if (mCurrentIndex < mQuestionBank.length -1) {
+                if (mCurrentIndex < mQuestionBank.length - 1) {
                     mCurrentIndex = (mCurrentIndex + 1);
                     mIsCheater = false;
+//                    mNumberOfCheats = 0;
+
                     updateQuestion();
                 }
             }
@@ -132,14 +133,19 @@ public class QuizActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
+
         if (resultCode != Activity.RESULT_OK) {
             return;
         }
-        if(requestCode == REQUEST_CODE_CHEAT) {
-            if(data == null) {
+        if (requestCode == REQUEST_CODE_CHEAT) {
+            if (data == null) {
                 return;
             }
             mIsCheater = CheatActivity.wasAnswerShown(data);
+            mNumberOfCheats = CheatActivity.numberOfCheats(data);
+            Log.d(TAG, " onActivityResult mNumberOfCheats " + mNumberOfCheats);
+
         }
 
     }
@@ -154,6 +160,15 @@ public class QuizActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         Log.d(TAG, "onResume() called");
+        Log.d(TAG, " onResume mNumberOfCheats " + mNumberOfCheats);
+
+
+        if (mNumberOfCheats >= 3) {
+            mCheatButton.setEnabled(false);
+            cheats_allowed = 0;
+        }
+
+
     }
 
     @Override
@@ -168,6 +183,7 @@ public class QuizActivity extends AppCompatActivity {
         Log.i(TAG, "onSaveInstanceState");
         savedInstanceState.putInt(KEY_INDEX, mCurrentIndex);
         savedInstanceState.putBoolean(KEY_ANSWER, mIsCheater);
+        savedInstanceState.putInt(KEY_CHEATS, mNumberOfCheats);
     }
 
     @Override
@@ -191,8 +207,9 @@ public class QuizActivity extends AppCompatActivity {
     private void checkAnswer(boolean userPressedTrue) {
         boolean answerIsTRue = mQuestionBank[mCurrentIndex].isAnswerTrue();
         int messageResId = 0;
-        if (mIsCheater) {
+        if (mIsCheater && mNumberOfCheats >= 3) {
             messageResId = R.string.judgment_toast;
+
         } else {
             if (userPressedTrue == answerIsTRue) {
                 messageResId = R.string.correct_toast;
@@ -202,7 +219,7 @@ public class QuizActivity extends AppCompatActivity {
             }
         }
         Toast.makeText(this, messageResId, Toast.LENGTH_SHORT).show();
-        if (mCurrentIndex >= mQuestionBank.length -1) {
+        if (mCurrentIndex >= mQuestionBank.length - 1) {
             mNextButton.setEnabled(false);
             double finalScore = (double) score / (double) mQuestionBank.length * 100;
             Toast.makeText(QuizActivity.this, finalScore + "%", Toast.LENGTH_LONG).show();
